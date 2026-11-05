@@ -12,7 +12,14 @@ age_columns = [prefix + age for age in AGE_GROUPS]
 missing_columns = [column for column in age_columns if column not in df.columns]
 
 if missing_columns:
-    st.error(
+    st.error(aiproject/
+│
+├── app.py
+├── popuiation.csv
+├── requirements.txt
+│
+└── pages/
+    └── 04_인구통계.py
         "선택한 조건에 해당하는 데이터 열을 찾지 못했습니다: "
         + ", ".join(missing_columns)
     )
