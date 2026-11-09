@@ -15,46 +15,60 @@ st.set_page_config(
 )
 
 st.title("🌡️ 월별 기온분석")
-st.write("원하는 월을 선택하면 연도별 최고기온과 최저기온을 비교할 수 있습니다.")
+st.write(
+    "원하는 월을 선택하면 연도별 최고기온과 "
+    "최저기온을 비교할 수 있습니다."
+)
 
 # -----------------------------
-# 2. CSV 파일 읽기
+# 2. CSV 파일 경로 설정
 # -----------------------------
-def read_csv_file(file):
-    for encoding in ["cp949", "utf-8-sig", "euc-kr", "utf-8"]:
+# 현재 파일은 pages 폴더에 있고
+# CSV 파일은 상위 폴더에 있음
+
+CSV_PATH = Path(__file__).parent.parent / "temperature.csv"
+
+if not CSV_PATH.exists():
+    st.error(
+        f"CSV 파일을 찾을 수 없습니다: {CSV_PATH}"
+    )
+    st.stop()
+
+# -----------------------------
+# 3. CSV 파일 읽기
+# -----------------------------
+def read_csv_file(file_path):
+
+    encodings = [
+        "cp949",
+        "utf-8-sig",
+        "euc-kr",
+        "utf-8"
+    ]
+
+    for encoding in encodings:
         try:
-            file.seek(0)
-            return pd.read_csv(file, encoding=encoding)
+            return pd.read_csv(
+                file_path,
+                encoding=encoding
+            )
         except UnicodeDecodeError:
             continue
 
-    raise ValueError("CSV 인코딩을 확인해 주세요.")
+    raise ValueError(
+        "CSV 인코딩을 확인해 주세요."
+    )
 
-uploaded_file = st.file_uploader(
-    "기온 데이터 CSV 파일을 업로드하세요.",
-    type=["csv"]
-)
-
-if uploaded_file is not None:
-    source_file = uploaded_file
-else:
-    default_file = Path(__file__).parent / "temperature.csv"
-
-    if default_file.exists():
-        source_file = default_file
-        st.info("temperature.csv 파일을 불러왔습니다.")
-    else:
-        st.warning("CSV 파일을 업로드해 주세요.")
-        st.stop()
 
 try:
-    df = read_csv_file(source_file)
+    df = read_csv_file(CSV_PATH)
+
 except Exception as e:
     st.error(f"파일 읽기 오류: {e}")
     st.stop()
 
 # -----------------------------
-# 3. 필요한 열 확인
+# 4. 필요한 열 확인
 # -----------------------------
 required_columns = [
     "일시",
@@ -68,12 +82,14 @@ missing = [
 ]
 
 if missing:
-    st.error(f"필요한 열이 없습니다: {missing}")
-    st.write("현재 열 이름:", df.columns.tolist())
+    st.error(
+        f"CSV 파일에서 필요한 열이 없습니다: {missing}"
+    )
+    st.write("현재 CSV 열 이름:", df.columns.tolist())
     st.stop()
 
 # -----------------------------
-# 4. 날짜 및 기온 데이터 처리
+# 5. 날짜 및 기온 데이터 처리
 # -----------------------------
 df["일시"] = pd.to_datetime(
     df["일시"].astype(str).str.strip(),
@@ -107,13 +123,21 @@ df["연도"] = df["일시"].dt.year
 df["월"] = df["일시"].dt.month
 
 # -----------------------------
-# 5. 월 선택
+# 6. 월 선택
 # -----------------------------
 month_names = {
-    1: "1월", 2: "2월", 3: "3월",
-    4: "4월", 5: "5월", 6: "6월",
-    7: "7월", 8: "8월", 9: "9월",
-    10: "10월", 11: "11월", 12: "12월"
+    1: "1월",
+    2: "2월",
+    3: "3월",
+    4: "4월",
+    5: "5월",
+    6: "6월",
+    7: "7월",
+    8: "8월",
+    9: "9월",
+    10: "10월",
+    11: "11월",
+    12: "12월"
 }
 
 selected_month = st.selectbox(
@@ -123,17 +147,17 @@ selected_month = st.selectbox(
 )
 
 # -----------------------------
-# 6. 선택한 월의 연도별 데이터
+# 7. 선택한 월 데이터 추출
 # -----------------------------
 monthly_df = df[
     df["월"] == selected_month
-]
+].copy()
 
 if monthly_df.empty:
     st.warning("선택한 월의 데이터가 없습니다.")
     st.stop()
 
-# 같은 연도에 여러 자료가 있으면 평균 계산
+# 연도별 평균 계산
 yearly = (
     monthly_df
     .groupby("연도")
@@ -146,7 +170,7 @@ yearly = (
 )
 
 # -----------------------------
-# 7. 한글 폰트 설정
+# 8. 한글 폰트 설정
 # -----------------------------
 available_fonts = {
     font.name for font in fm.fontManager.ttflist
@@ -167,11 +191,11 @@ for font in font_candidates:
 plt.rcParams["axes.unicode_minus"] = False
 
 # -----------------------------
-# 8. 꺾은 선 그래프
+# 9. 꺾은 선 그래프
 # -----------------------------
 fig, ax = plt.subplots(figsize=(12, 6))
 
-# 최고기온 - 형광 주황색
+# 최고기온: 형광 주황색
 ax.plot(
     yearly["연도"],
     yearly["최고기온(℃)"],
@@ -182,7 +206,7 @@ ax.plot(
     label="최고기온"
 )
 
-# 최저기온 - 형광 파란색
+# 최저기온: 형광 파란색
 ax.plot(
     yearly["연도"],
     yearly["최저기온(℃)"],
@@ -193,13 +217,14 @@ ax.plot(
     label="최저기온"
 )
 
-# 그래프 제목 및 축
+# 그래프 제목
 ax.set_title(
     "월별 기온분석",
     fontsize=20,
     pad=20
 )
 
+# 가로축과 세로축
 ax.set_xlabel("연도", fontsize=13)
 ax.set_ylabel("온도 (℃)", fontsize=13)
 
@@ -225,13 +250,16 @@ if len(years) > 20:
 
 plt.tight_layout()
 
-# Streamlit 화면 출력
-st.pyplot(fig, use_container_width=True)
+# 그래프 출력
+st.pyplot(
+    fig,
+    use_container_width=True
+)
 
 plt.close(fig)
 
 # -----------------------------
-# 9. 데이터 표 출력
+# 10. 분석 데이터 표
 # -----------------------------
 st.subheader(
     f"📊 {selected_month}월 연도별 기온 데이터"
@@ -252,5 +280,7 @@ st.dataframe(
 )
 
 st.caption(
-    "※ 동일 연도에 여러 자료가 있으면 평균값으로 계산합니다."
+    "※ 같은 연도에 데이터가 여러 개 있으면 평균값으로 계산합니다."
 )
+
+st.success("기온 데이터 분석이 완료되었습니다! 🌡️")
