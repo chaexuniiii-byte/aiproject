@@ -3,8 +3,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
+
 from pathlib import Path
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+
 
 # =====================================
 # 1. 화면 설정
@@ -15,9 +19,10 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🌡️ 선형회귀를 이용한 기온 예측 AI")
+st.title("🌡️ 인공지능 회귀 알고리즘 기온 예측")
 st.markdown("""
-과거 기온 데이터를 분석하여 미래의 기온을 예측해 봅시다!
+과거 기온 데이터를 이용하여 머신러닝 알고리즘으로
+미래의 기온을 예측해 봅시다!
 """)
 
 st.divider()
@@ -26,7 +31,7 @@ st.divider()
 # =====================================
 # 2. CSV 파일 경로 설정
 # =====================================
-# 현재 파이썬 파일: pages/06_기온예측.py
+# 현재 파일: pages/06_기온예측.py
 # CSV 파일: 프로젝트 최상위 폴더/temperature.csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -41,10 +46,10 @@ def load_data():
 
     if not CSV_PATH.exists():
         raise FileNotFoundError(
-            f"CSV 파일을 찾을 수 없습니다.\n경로: {CSV_PATH}"
+            f"CSV 파일을 찾을 수 없습니다.\n{CSV_PATH}"
         )
 
-    # 한글 CSV 인코딩 처리
+    # 한글 인코딩 처리
     try:
         data = pd.read_csv(
             CSV_PATH,
@@ -57,7 +62,10 @@ def load_data():
         )
 
     # 필요한 열 확인
-    required_columns = ["일시", "평균기온(℃)"]
+    required_columns = [
+        "일시",
+        "평균기온(℃)"
+    ]
 
     for col in required_columns:
         if col not in data.columns:
@@ -93,7 +101,6 @@ def load_data():
     return data
 
 
-# 데이터 불러오기
 try:
     df = load_data()
 
@@ -147,7 +154,42 @@ predict_year = int(predict_year)
 
 
 # =====================================
-# 5. 선택한 월의 데이터 추출
+# 5. 회귀 알고리즘 선택
+# =====================================
+st.divider()
+
+st.subheader("🤖 회귀 알고리즘 선택")
+
+algorithm_names = {
+    "선형회귀": "Linear Regression",
+    "랜덤 포레스트 회귀": "Random Forest Regression",
+    "그래디언트 부스팅 회귀": "Gradient Boosting Regression"
+}
+
+selected_algorithm = st.selectbox(
+    "사용할 머신러닝 알고리즘을 선택하세요.",
+    list(algorithm_names.keys())
+)
+
+algorithm_descriptions = {
+    "선형회귀":
+        "데이터의 전체적인 추세를 직선으로 학습합니다.",
+
+    "랜덤 포레스트 회귀":
+        "여러 의사결정나무의 예측값을 평균하여 결과를 만듭니다.",
+
+    "그래디언트 부스팅 회귀":
+        "여러 작은 의사결정나무를 순차적으로 학습하여 오차를 보완합니다."
+}
+
+st.info(
+    f"선택한 알고리즘: **{selected_algorithm}**\n\n"
+    f"{algorithm_descriptions[selected_algorithm]}"
+)
+
+
+# =====================================
+# 6. 선택한 월의 데이터 추출
 # =====================================
 month_df = df[
     df["월"] == selected_month
@@ -155,41 +197,79 @@ month_df = df[
 
 month_df = month_df.sort_values("연도")
 
-if len(month_df) < 2:
-    st.error("예측에 필요한 데이터가 부족합니다.")
+if len(month_df) < 3:
+    st.error("회귀 분석에 필요한 데이터가 부족합니다.")
     st.stop()
 
 
 # =====================================
-# 6. 선형회귀 모델 학습
+# 7. 세 가지 회귀 모델 생성
 # =====================================
 X = month_df[["연도"]]
 y = month_df["평균기온(℃)"]
 
-model = LinearRegression()
+models = {
 
-# 과거 데이터 학습
-model.fit(X, y)
+    "선형회귀": LinearRegression(),
 
-# 과거 데이터의 회귀 예측값
-month_df["회귀예측"] = model.predict(X)
+    "랜덤 포레스트 회귀": RandomForestRegressor(
+        n_estimators=200,
+        max_depth=4,
+        min_samples_leaf=2,
+        random_state=42
+    ),
 
-# 미래 기온 예측
-prediction = model.predict(
-    pd.DataFrame({"연도": [predict_year]})
-)[0]
-
-# 회귀식 정보
-slope = model.coef_[0]
-intercept = model.intercept_
-
-# 결정계수
-r2 = model.score(X, y)
+    "그래디언트 부스팅 회귀": GradientBoostingRegressor(
+        n_estimators=100,
+        learning_rate=0.05,
+        max_depth=2,
+        loss="squared_error",
+        random_state=42
+    )
+}
 
 
 # =====================================
-# 7. 예측 결과 출력
+# 8. 모든 알고리즘 학습 및 예측
 # =====================================
+results = {}
+models_info = {}
+
+for name, model in models.items():
+
+    # 모델 학습
+    model.fit(X, y)
+
+    # 과거 데이터 예측
+    train_predictions = model.predict(X)
+
+    # 미래 데이터 예측
+    future_prediction = model.predict(
+        pd.DataFrame({
+            "연도": [predict_year]
+        })
+    )[0]
+
+    # 결정계수
+    r2 = model.score(X, y)
+
+    results[name] = {
+        "예측기온": future_prediction,
+        "결정계수": r2
+    }
+
+    models_info[name] = model
+
+
+# =====================================
+# 9. 선택한 알고리즘 결과
+# =====================================
+selected_model = models_info[selected_algorithm]
+
+prediction = results[selected_algorithm]["예측기온"]
+
+r2 = results[selected_algorithm]["결정계수"]
+
 st.divider()
 
 st.subheader("🎯 AI 기온 예측 결과")
@@ -211,26 +291,27 @@ with c2:
 with c3:
     st.metric(
         "예측 평균기온",
-        f"{prediction:.1f} ℃"
+        f"{prediction:.2f} ℃"
     )
 
 st.success(
-    f"🌡️ {predict_year}년 {month_names[selected_month]} "
-    f"예상 평균기온은 {prediction:.1f}℃입니다."
+    f"🌡️ {selected_algorithm} 분석 결과\n\n"
+    f"{predict_year}년 {month_names[selected_month]}의 "
+    f"예상 평균기온은 **{prediction:.2f}℃**입니다."
 )
 
 
 # =====================================
-# 8. 기온 그래프
+# 10. 선택한 알고리즘 그래프
 # =====================================
 st.divider()
 
 st.subheader(
     f"📈 {month_names[selected_month]} "
-    "연도별 기온 및 예측 그래프"
+    f"{selected_algorithm} 예측 그래프"
 )
 
-# 회귀 직선에 사용할 연도
+# 그래프 연도 설정
 start_year = int(month_df["연도"].min())
 
 end_year = max(
@@ -243,14 +324,19 @@ line_years = np.arange(
     end_year + 1
 )
 
-line_predictions = model.predict(
-    pd.DataFrame({"연도": line_years})
+line_predictions = selected_model.predict(
+    pd.DataFrame({
+        "연도": line_years
+    })
 )
+
+# 과거 데이터 예측
+month_df["회귀예측"] = selected_model.predict(X)
 
 # 그래프 생성
 fig, ax = plt.subplots(figsize=(12, 6))
 
-# ① 실제 기온 데이터
+# 실제 기온
 ax.scatter(
     month_df["연도"],
     month_df["평균기온(℃)"],
@@ -261,27 +347,27 @@ ax.scatter(
     zorder=3
 )
 
-# ② 실제값과 회귀선 사이의 오차
+# 실제값과 예측값의 차이
 ax.vlines(
     month_df["연도"],
     month_df["평균기온(℃)"],
     month_df["회귀예측"],
     color="gray",
     alpha=0.4,
-    linewidth=1.2,
+    linewidth=1,
     label="Prediction Error"
 )
 
-# ③ 선형회귀 직선
+# 회귀 모델의 예측선
 ax.plot(
     line_years,
     line_predictions,
     color="red",
     linewidth=2.5,
-    label="Linear Regression Line"
+    label=selected_algorithm
 )
 
-# ④ 미래 예측 지점
+# 미래 예측 지점
 ax.scatter(
     predict_year,
     prediction,
@@ -295,7 +381,7 @@ ax.scatter(
 
 # 예측값 표시
 ax.annotate(
-    f"{prediction:.1f}℃",
+    f"{prediction:.2f}℃",
     xy=(predict_year, prediction),
     xytext=(10, 15),
     textcoords="offset points",
@@ -304,7 +390,6 @@ ax.annotate(
     color="green"
 )
 
-# 예측 연도 수직선
 ax.axvline(
     predict_year,
     color="green",
@@ -331,128 +416,232 @@ plt.close(fig)
 
 
 # =====================================
-# 9. 선형회귀 분석 결과
+# 11. 세 가지 알고리즘 결과 비교
 # =====================================
 st.divider()
 
-st.subheader("🧠 AI 선형회귀 분석 정보")
+st.subheader("🏆 세 가지 알고리즘 예측 결과 비교")
 
-c1, c2 = st.columns(2)
-
-with c1:
-    st.metric(
-        "기울기 (Slope)",
-        f"{slope:.4f}"
-    )
-
-with c2:
-    st.metric(
-        "결정계수 (R²)",
-        f"{r2:.4f}"
-    )
-
-st.markdown("### 📐 선형회귀 예측 공식")
-
-# 중요: 중괄호 오류 방지를 위해 f-string 사용
-formula = (
-    rf"\hat{{y}} = {slope:.4f}x "
-    rf"{intercept:+.4f}"
+st.write(
+    "동일한 월과 예측연도를 기준으로 "
+    "세 가지 알고리즘의 결과를 비교합니다."
 )
 
-st.latex(formula)
+comparison_df = pd.DataFrame([
+    {
+        "알고리즘": name,
+        "예측 평균기온(℃)": round(
+            info["예측기온"], 2
+        ),
+        "결정계수(R²)": round(
+            info["결정계수"], 4
+        )
+    }
+    for name, info in results.items()
+])
 
-st.markdown(f"""
-- x : 연도
-- ŷ : 예측 평균기온
-- 기울기 : 연도가 1년 증가할 때 예측 기온의 변화량
-- 결정계수(R²) : 회귀 직선이 과거 기온의 변동을 설명하는 정도
-""")
-
-if slope > 0:
-    st.info(
-        f"📈 분석 결과, 연평균적으로 해당 월의 예측 기온이 "
-        f"약 {slope:.3f}℃씩 상승하는 추세입니다."
-    )
-
-elif slope < 0:
-    st.info(
-        f"📉 분석 결과, 연평균적으로 해당 월의 예측 기온이 "
-        f"약 {abs(slope):.3f}℃씩 하락하는 추세입니다."
-    )
-
-else:
-    st.info(
-        "분석 결과, 뚜렷한 상승 또는 하락 추세가 없습니다."
-    )
+st.dataframe(
+    comparison_df,
+    use_container_width=True,
+    hide_index=True
+)
 
 
 # =====================================
-# 10. 선형회귀 알고리즘 설명
+# 12. 알고리즘별 예측값 비교 그래프
+# =====================================
+st.subheader("📊 알고리즘별 예측 기온 비교")
+
+fig2, ax2 = plt.subplots(figsize=(10, 5))
+
+algorithm_list = list(results.keys())
+
+prediction_list = [
+    results[name]["예측기온"]
+    for name in algorithm_list
+]
+
+bars = ax2.bar(
+    algorithm_list,
+    prediction_list
+)
+
+# 막대 위에 기온 표시
+for bar, value in zip(bars, prediction_list):
+
+    ax2.text(
+        bar.get_x() + bar.get_width() / 2,
+        bar.get_height(),
+        f"{value:.2f}℃",
+        ha="center",
+        va="bottom",
+        fontsize=11
+    )
+
+ax2.set_title(
+    f"{predict_year}년 {month_names[selected_month]} "
+    "알고리즘별 예측 결과"
+)
+
+ax2.set_ylabel("Predicted Temperature (℃)")
+
+ax2.grid(
+    axis="y",
+    alpha=0.25
+)
+
+fig2.tight_layout()
+
+st.pyplot(fig2)
+
+plt.close(fig2)
+
+
+# =====================================
+# 13. 알고리즘별 차이 확인
+# =====================================
+st.subheader("🔍 알고리즘별 예측 차이")
+
+max_prediction = max(prediction_list)
+min_prediction = min(prediction_list)
+
+difference = max_prediction - min_prediction
+
+st.metric(
+    "세 알고리즘의 최대 예측 차이",
+    f"{difference:.2f} ℃"
+)
+
+st.write(
+    f"세 가지 알고리즘 중 가장 높은 예측값과 "
+    f"가장 낮은 예측값의 차이는 **{difference:.2f}℃**입니다."
+)
+
+st.caption(
+    "알고리즘마다 학습 방법과 예측 방식이 다르기 때문에 "
+    "동일한 데이터에서도 서로 다른 결과가 나올 수 있습니다."
+)
+
+
+# =====================================
+# 14. 선택한 알고리즘의 분석 정보
 # =====================================
 st.divider()
 
-st.subheader("📚 선형회귀(Linear Regression)란?")
+st.subheader("🧠 선택한 알고리즘 분석 정보")
 
-st.markdown("""
-선형회귀는 과거 데이터를 분석하여 데이터의 관계를
-가장 잘 설명하는 직선을 찾는 머신러닝 알고리즘입니다.
-
-이번 앱에서는 **연도와 평균기온의 관계**를 학습합니다.
-
-### ① 데이터 학습
-
-CSV 파일에서 사용자가 선택한 월의 모든 연도별 평균기온을 가져옵니다.
-
-예를 들어 1월을 선택하면 모든 연도의 1월 평균기온을 학습합니다.
-
-### ② 가장 적합한 직선 찾기
-
-AI는 실제 기온과 직선이 예측한 기온의 차이를 계산합니다.
-
-이 차이를 오차(Residual)라고 합니다.
-
-오차의 제곱을 모두 더한 값이 최소가 되도록 직선을 결정합니다.
-
-### ③ 미래 기온 예측
-
-학습한 직선에 사용자가 입력한 연도를 대입합니다.
-
-그 결과 해당 연도의 예상 평균기온을 계산합니다.
-
-### ④ 그래프 읽는 방법
-
-- 🔵 파란 점 : 실제 관측된 평균기온
-- 🔴 빨간 선 : AI가 학습한 선형회귀 직선
-- 🟢 초록 별 : 미래 예측 기온
-- 회색 세로선 : 실제 기온과 회귀선의 예측값 차이
-
-### ⑤ 선형회귀의 핵심 수식
-""")
-
-st.latex(
-    r"\hat{y} = b_0 + b_1x"
+st.metric(
+    "결정계수 (R²)",
+    f"{r2:.4f}"
 )
 
 st.markdown("""
-- x : 입력 데이터(연도)
-- b₀ : 절편
-- b₁ : 기울기
-- ŷ : 예측 결과(기온)
+**결정계수(R²)란?**
 
-### ⚠️ 주의사항
+실제 기온 데이터의 변동을 모델이 얼마나 설명하는지를 나타내는 지표입니다.
 
-선형회귀는 과거의 추세를 바탕으로 미래를 예측합니다.
+- 1에 가까울수록 학습 데이터에 대한 설명력이 높습니다.
+- 0에 가까우면 평균값을 사용하는 것과 비슷한 설명력을 가집니다.
+- 음수라면 학습 데이터에서 평균값을 사용하는 것보다 설명력이 낮습니다.
 
-실제 기온은 온실가스, 기후변화, 자연현상 등
-다양한 요인의 영향을 받습니다.
-
-따라서 예측 결과는 실제 기온과 다를 수 있으며,
-특히 먼 미래를 예측할수록 오차가 커질 수 있습니다.
+주의: 여기 표시된 결정계수는 학습에 사용한 데이터에 대한 값이며,
+미래 예측의 정확도를 보장하지 않습니다.
 """)
 
 
 # =====================================
-# 11. 원본 데이터 확인
+# 15. 알고리즘 작동 원리 설명
+# =====================================
+st.divider()
+
+st.subheader("📚 세 가지 회귀 알고리즘 알아보기")
+
+# 선형회귀
+with st.expander("① 선형회귀 (Linear Regression)"):
+
+    st.markdown("""
+    **데이터를 가장 잘 설명하는 직선을 찾는 알고리즘입니다.**
+
+    연도와 기온 사이의 관계를 직선으로 표현합니다.
+
+    예측 수식:
+    """)
+
+    st.latex(
+        r"\hat{y} = b_0 + b_1x"
+    )
+
+    st.markdown("""
+    - x : 연도
+    - b₀ : 절편
+    - b₁ : 기울기
+    - ŷ : 예측 기온
+
+    **특징**
+
+    - 전체적인 상승 및 하락 추세를 파악하기 좋습니다.
+    - 계산이 빠르고 결과를 이해하기 쉽습니다.
+    - 복잡한 곡선 형태의 관계를 표현하기 어렵습니다.
+    """)
+
+
+# 랜덤 포레스트
+with st.expander("② 랜덤 포레스트 회귀 (Random Forest)"):
+
+    st.markdown("""
+    **여러 개의 의사결정나무를 만들어 결과를 평균내는 알고리즘입니다.**
+
+    하나의 나무만 사용하는 것이 아니라 여러 나무가 각각 예측한 결과를 모아 최종 예측값을 만듭니다.
+
+    예측 개념:
+    """)
+
+    st.latex(
+        r"\hat{y} = \frac{1}{N}\sum_{i=1}^{N}T_i(x)"
+    )
+
+    st.markdown("""
+    - N : 의사결정나무의 개수
+    - Tᵢ(x) : 각 나무의 예측 결과
+    - ŷ : 최종 예측값
+
+    **특징**
+
+    - 여러 나무의 결과를 평균하여 예측합니다.
+    - 비선형적인 관계를 학습할 수 있습니다.
+    - 데이터의 복잡한 패턴을 찾는 데 유용합니다.
+    - 일반적으로 학습 데이터의 범위를 벗어난 미래 외삽에는 적합하지 않습니다.
+    """)
+
+
+# 그래디언트 부스팅
+with st.expander("③ 그래디언트 부스팅 회귀 (Gradient Boosting)"):
+
+    st.markdown("""
+    **여러 개의 작은 의사결정나무를 순서대로 학습하는 알고리즘입니다.**
+
+    첫 번째 모델이 예측한 결과의 오차를 다음 모델이 보완합니다.
+
+    이 과정을 반복하여 예측 성능을 개선합니다.
+
+    **작동 과정**
+
+    1. 첫 번째 모델이 기온을 예측합니다.
+    2. 실제 기온과 예측 기온의 오차를 계산합니다.
+    3. 다음 모델이 이전 모델의 오차를 보완합니다.
+    4. 여러 모델의 결과를 합쳐 최종 예측값을 만듭니다.
+
+    **특징**
+
+    - 이전 모델의 오차를 순차적으로 보완합니다.
+    - 복잡한 데이터 패턴을 학습할 수 있습니다.
+    - 학습률과 나무의 깊이 등에 따라 결과가 달라집니다.
+    - 과적합에 주의해야 합니다.
+    """)
+
+
+# =====================================
+# 16. 데이터 확인
 # =====================================
 st.divider()
 
@@ -465,11 +654,13 @@ with st.expander("📋 분석에 사용한 원본 데이터 확인"):
     display_df.columns = [
         "연도",
         "실제 평균기온(℃)",
-        "회귀선 예측기온(℃)"
+        "선택한 알고리즘 예측기온(℃)"
     ]
 
-    display_df["회귀선 예측기온(℃)"] = (
-        display_df["회귀선 예측기온(℃)"].round(2)
+    display_df["선택한 알고리즘 예측기온(℃)"] = (
+        display_df[
+            "선택한 알고리즘 예측기온(℃)"
+        ].round(2)
     )
 
     st.dataframe(
@@ -480,10 +671,11 @@ with st.expander("📋 분석에 사용한 원본 데이터 확인"):
 
 
 # =====================================
-# 12. 마무리
+# 17. 마무리
 # =====================================
 st.divider()
 
 st.caption(
-    "🌍 기온 예측 AI | 선형회귀 머신러닝 데이터 분석 프로젝트"
+    "🌍 AI 기온 예측 | Linear Regression · "
+    "Random Forest · Gradient Boosting"
 )
