@@ -37,7 +37,7 @@ st.divider()
 @st.cache_data
 def load_data():
 
-    file_path = Path(__file__).parent / "아이리스.csv"
+    file_path = Path(__file__).parent / "iris.csv"
 
     if not file_path.exists():
         raise FileNotFoundError(
