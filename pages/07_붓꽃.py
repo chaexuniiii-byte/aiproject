@@ -39,7 +39,7 @@ def load_data():
     base_dir = Path(__file__).resolve().parent.parent
 
     # CSV 파일 경로
-    csv_path = base_dir / "Iris.csv"
+    csv_path = base_dir / "iris.csv"
 
     if not csv_path.is_file():
         st.error("❌ Iris.csv 파일을 찾을 수 없습니다.")
