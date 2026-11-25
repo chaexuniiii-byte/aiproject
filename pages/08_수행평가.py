@@ -1,8 +1,7 @@
 
 import streamlit as st
 import pandas as pd
-from pathlib import Path
-import html
+
 
 # ==========================================
 # 1. 페이지 기본 설정
@@ -63,7 +62,7 @@ st.markdown(
 
 st.markdown(
     '<div class="sub-title">'
-    '내가 원하는 칼로리에 맞는 음식을 찾아보세요!'
+    '내가 원하는음식을 찾아보세요!'
     '</div>',
     unsafe_allow_html=True
 )
@@ -165,7 +164,7 @@ def load_data():
                 errors="coerce"
             )
 
-    # 음식 이름 정리
+    # 음식 정리
     data["food"] = (
         data["food"]
         .astype("string")
